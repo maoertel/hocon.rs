@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{Hocon, HoconLoaderConfig};
@@ -262,9 +263,9 @@ impl HoconValue {
                     let children = substituted
                         .into_iter()
                         .flat_map(|node| match node {
-                            Node::Leaf(_) => vec![std::rc::Rc::new(Child {
+                            Node::Leaf(_) => vec![Rc::new(Child {
                                 key: HoconValue::Integer(0),
-                                value: std::cell::RefCell::new(node),
+                                value: RefCell::new(node),
                             })],
                             Node::Node { children, .. } => children,
                         })
@@ -275,7 +276,7 @@ impl HoconValue {
                             {
                                 None
                             }
-                            _ => Some(std::rc::Rc::new(Child {
+                            _ => Some(Rc::new(Child {
                                 key: HoconValue::Integer(i as i64),
                                 value: child.value.clone(),
                             })),

@@ -5,7 +5,6 @@ use crate::{Hocon, HoconLoaderConfig};
 
 use super::value::HoconValue;
 
-use crate::internals::value;
 use linked_hash_map::LinkedHashMap;
 
 #[derive(Clone, Debug)]
@@ -30,7 +29,7 @@ impl Child {
         *std::cell::Ref::map(self.value.borrow(), |v| {
             if let Node::Node { children, .. } = v {
                 let is_included_leaf = children
-                    .get(0)
+                    .first()
                     .map(|child| {
                         *std::cell::Ref::map(child.value.borrow(), |v| {
                             if let Node::Leaf(HoconValue::Included { .. }) = v {
@@ -173,7 +172,7 @@ impl Node {
                             .ok_or(crate::Error::KeyNotFound {
                                 key: path
                                     .into_iter()
-                                    .map(value::HoconValue::string_value)
+                                    .map(HoconValue::string_value)
                                     .collect::<Vec<_>>()
                                     .join("."),
                             })
@@ -190,7 +189,7 @@ impl Node {
                 crate::Error::KeyNotFound {
                     key: path
                         .into_iter()
-                        .map(value::HoconValue::string_value)
+                        .map(HoconValue::string_value)
                         .collect::<Vec<_>>()
                         .join(".")
                 }

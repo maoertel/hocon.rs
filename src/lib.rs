@@ -420,7 +420,7 @@ impl HoconLoader {
     /// # Additional errors in strict mode
     ///
     /// * [`Error::IncludeNotAllowedFromStr`](enum.Error.html#variant.IncludeNotAllowedFromStr)
-    /// if there is an include in the string
+    ///   if there is an include in the string
     pub fn load_str(self, s: &str) -> Result<Self, Error> {
         self.load_from_str_of_conf_file(FileRead {
             hocon: Some(String::from(s)),
@@ -433,14 +433,14 @@ impl HoconLoader {
     /// # Errors
     ///
     /// * [`Error::File`](enum.Error.html#variant.File) if there was an error reading the
-    /// file content
+    ///   file content
     /// * [`Error::Parse`](enum.Error.html#variant.Parse) if the document is invalid
     ///
     /// # Additional errors in strict mode
     ///
     /// * [`Error::TooManyIncludes`](enum.Error.html#variant.TooManyIncludes)
-    /// if there are too many included files within included files. The limit can be
-    /// changed with [`max_include_depth`](struct.HoconLoader.html#method.max_include_depth)
+    ///   if there are too many included files within included files. The limit can be
+    ///   changed with [`max_include_depth`](struct.HoconLoader.html#method.max_include_depth)
     pub fn load_file<P: AsRef<Path>>(&self, path: P) -> Result<Self, Error> {
         let mut file_path = path.as_ref().to_path_buf();
         // pub fn load_file(&self, path: &str) -> Result<Self, Error> {
@@ -474,11 +474,11 @@ impl HoconLoader {
     /// # Errors in strict mode
     ///
     /// * [`Error::Include`](enum.Error.html#variant.Include) if there was an issue with an
-    /// included file
+    ///   included file
     /// * [`Error::KeyNotFound`](enum.Error.html#variant.KeyNotFound) if there is a substitution
-    /// with a key that is not present in the document
+    ///   with a key that is not present in the document
     /// * [`Error::DisabledExternalUrl`](enum.Error.html#variant.DisabledExternalUrl) if crate
-    /// was built without feature `url-support` and an `include url("...")` was found
+    ///   was built without feature `url-support` and an `include url("...")` was found
     pub fn hocon(self) -> Result<Hocon, Error> {
         let config = &self.config;
         self.internal.merge(config)?.finalize(config)
@@ -489,16 +489,16 @@ impl HoconLoader {
     /// # Errors
     ///
     /// * [`Error::Deserialization`](enum.Error.html#variant.Deserialization) if there was a
-    /// serde error during deserialization (missing required field, type issue, ...)
+    ///   serde error during deserialization (missing required field, type issue, ...)
     ///
     /// # Additional errors in strict mode
     ///
     /// * [`Error::Include`](enum.Error.html#variant.Include) if there was an issue with an
-    /// included file
+    ///   included file
     /// * [`Error::KeyNotFound`](enum.Error.html#variant.KeyNotFound) if there is a substitution
-    /// with a key that is not present in the document
+    ///   with a key that is not present in the document
     /// * [`Error::DisabledExternalUrl`](enum.Error.html#variant.DisabledExternalUrl) if crate
-    /// was built without feature `url-support` and an `include url("...")` was found
+    ///   was built without feature `url-support` and an `include url("...")` was found
     #[cfg(feature = "serde-support")]
     pub fn resolve<'de, T>(self) -> Result<T, Error>
     where
@@ -551,8 +551,10 @@ mod tests {
         assert_eq!(doc["a"]["b"].as_string(), Some(String::from("c")));
     }
 
+    #[cfg(feature = "serde-support")]
     use serde::Deserialize;
 
+    #[cfg(feature = "serde-support")]
     #[derive(Deserialize, Debug)]
     struct Simple {
         #[allow(dead_code)]
@@ -562,6 +564,7 @@ mod tests {
         #[allow(dead_code)]
         option_int: Option<u64>,
     }
+    #[cfg(feature = "serde-support")]
     #[derive(Deserialize, Debug)]
     struct WithSubStruct {
         #[allow(dead_code)]

@@ -3,8 +3,8 @@ use thiserror::Error;
 /// Errors that can be encountered while reading a HOCON document
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum Error {
-    /// Captures IO-Errors. Usually we would use a transparent error but io::Error is not clonable
-    #[error("Error during IO")]
+    /// Captures IO-Errors. Usually we would use a transparent error but io::Error is not cloneable
+    #[error("Error during IO: {message}")]
     Io {
         /// the description of the original IOError
         message: String,
