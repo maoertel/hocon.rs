@@ -117,7 +117,7 @@ fn parse_bool() {
         .hocon()
         .expect("during test");
 
-    assert_eq!(doc["a"].as_bool().expect("during test"), true);
+    assert!(doc["a"].as_bool().expect("during test"));
 }
 
 #[test]
