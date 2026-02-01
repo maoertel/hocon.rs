@@ -12,7 +12,7 @@ pub(crate) fn unescape(input: &str) -> Cow<'_, str> {
     const HIGH_SURROGATES: Range<u16> = 0xd800..0xdc00;
     const LOW_SURROGATES: Range<u16> = 0xdc00..0xe000;
     lazy_static! {
-        static ref AC: AhoCorasick = AhoCorasick::new_auto_configured(PATTERNS);
+        static ref AC: AhoCorasick = AhoCorasick::new(PATTERNS).expect("valid patterns");
     }
 
     let mut res = Cow::default();
@@ -22,7 +22,7 @@ pub(crate) fn unescape(input: &str) -> Cow<'_, str> {
         res += &input[last_start..mat.start()];
         last_start = mat.end();
 
-        if let Some(repl) = REPLACEMENTS.get(mat.pattern()) {
+        if let Some(repl) = REPLACEMENTS.get(mat.pattern().as_usize()) {
             res += *repl;
         } else if mat.end() + 4 <= input.len() {
             // Handle \u
