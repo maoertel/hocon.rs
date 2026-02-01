@@ -1,15 +1,20 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::{Hocon, HoconLoaderConfig};
+use crate::Hocon;
+use crate::HoconLoaderConfig;
 
-use super::intermediate::{Child, HoconIntermediate, KeyType, Node};
+use super::intermediate::Child;
+use super::intermediate::HoconIntermediate;
+use super::intermediate::KeyType;
+use super::intermediate::Node;
 
 #[derive(Clone, Debug)]
 pub(crate) enum HoconValue {
     Real(f64),
     Integer(i64),
-    String(String),
-    UnquotedString(String),
+    String(Rc<str>),
+    UnquotedString(Rc<str>),
     Boolean(bool),
     Concat(Vec<HoconValue>),
     PathSubstitution {
@@ -20,9 +25,9 @@ pub(crate) enum HoconValue {
     PathSubstitutionInParent(Box<HoconValue>),
     ToConcatToArray {
         value: Box<HoconValue>,
-        original_path: Vec<HoconValue>,
+        original_path: Rc<[HoconValue]>,
         // an internal id, to keep track of the current parent object in case of an object to concat to an array
-        item_id: String,
+        item_id: Rc<str>,
     },
     Null(String),
     // Placeholder for a value that will be replaced before returning final document
@@ -36,7 +41,7 @@ pub(crate) enum HoconValue {
     Included {
         value: Box<HoconValue>,
         include_root: Option<Vec<HoconValue>>,
-        original_path: Vec<HoconValue>,
+        original_path: Rc<[HoconValue]>,
     },
 }
 
@@ -64,14 +69,13 @@ impl HoconValue {
 
     pub(crate) fn to_path(&self) -> Vec<HoconValue> {
         match self {
-            HoconValue::UnquotedString(s) if s == "." => vec![],
+            HoconValue::UnquotedString(s) if s.as_ref() == "." => vec![],
             HoconValue::UnquotedString(s) => s
                 .trim()
                 .split('.')
-                .map(String::from)
-                .map(HoconValue::String)
+                .map(|s| HoconValue::String(Rc::from(s)))
                 .collect(),
-            HoconValue::String(s) => vec![HoconValue::String(s.clone())],
+            HoconValue::String(s) => vec![HoconValue::String(Rc::clone(s))],
             HoconValue::Concat(values) => values.iter().flat_map(HoconValue::to_path).collect(),
             _ => vec![self.clone()],
         }
@@ -91,13 +95,13 @@ impl HoconValue {
             HoconValue::Boolean(b) => Ok(Hocon::Boolean(b)),
             HoconValue::Integer(i) => Ok(Hocon::Integer(i)),
             HoconValue::Real(f) => Ok(Hocon::Real(f)),
-            HoconValue::String(s) => Ok(Hocon::String(s)),
-            HoconValue::UnquotedString(ref s) if s == "null" => Ok(Hocon::Null),
+            HoconValue::String(s) => Ok(Hocon::String(s.to_string())),
+            HoconValue::UnquotedString(ref s) if s.as_ref() == "null" => Ok(Hocon::Null),
             HoconValue::UnquotedString(s) => {
                 if in_concat {
-                    Ok(Hocon::String(s))
+                    Ok(Hocon::String(s.to_string()))
                 } else {
-                    Ok(Hocon::String(String::from(s.trim())))
+                    Ok(Hocon::String(s.trim().to_string()))
                 }
             }
             HoconValue::Concat(values) => Ok(Hocon::String({
@@ -107,10 +111,10 @@ impl HoconValue {
                     .enumerate()
                     .map(|item| match item {
                         (0, HoconValue::UnquotedString(s)) => {
-                            HoconValue::UnquotedString(String::from(s.trim_start()))
+                            HoconValue::UnquotedString(Rc::from(s.trim_start()))
                         }
                         (i, HoconValue::UnquotedString(ref s)) if i == nb_items - 1 => {
-                            HoconValue::UnquotedString(String::from(s.trim_end()))
+                            HoconValue::UnquotedString(Rc::from(s.trim_end()))
                         }
                         (_, v) => v,
                     })
@@ -202,17 +206,17 @@ impl HoconValue {
             HoconValue::Boolean(b) => Ok(Hocon::Boolean(b)),
             HoconValue::Integer(i) => Ok(Hocon::Integer(i)),
             HoconValue::Real(f) => Ok(Hocon::Real(f)),
-            HoconValue::String(s) => Ok(Hocon::String(s)),
-            HoconValue::UnquotedString(ref s) if s == "null" => Ok(Hocon::Null),
-            HoconValue::UnquotedString(s) => Ok(Hocon::String(String::from(s.trim()))),
+            HoconValue::String(s) => Ok(Hocon::String(s.to_string())),
+            HoconValue::UnquotedString(ref s) if s.as_ref() == "null" => Ok(Hocon::Null),
+            HoconValue::UnquotedString(s) => Ok(Hocon::String(s.trim().to_string())),
             _ => unimplemented!(),
         }
     }
 
     pub(crate) fn string_value(self) -> String {
         match self {
-            HoconValue::String(s) => s,
-            HoconValue::UnquotedString(s) => s,
+            HoconValue::String(s) => s.to_string(),
+            HoconValue::UnquotedString(s) => s.to_string(),
             HoconValue::Null(_) => String::from("null"),
             HoconValue::Integer(i) => i.to_string(),
             _ => unreachable!(),
@@ -262,9 +266,9 @@ impl HoconValue {
                     let children = substituted
                         .into_iter()
                         .flat_map(|node| match node {
-                            Node::Leaf(_) => vec![std::rc::Rc::new(Child {
+                            Node::Leaf(_) => vec![Rc::new(Child {
                                 key: HoconValue::Integer(0),
-                                value: std::cell::RefCell::new(node),
+                                value: RefCell::new(node),
                             })],
                             Node::Node { children, .. } => children,
                         })
@@ -275,7 +279,7 @@ impl HoconValue {
                             {
                                 None
                             }
-                            _ => Some(std::rc::Rc::new(Child {
+                            _ => Some(Rc::new(Child {
                                 key: HoconValue::Integer(i as i64),
                                 value: child.value.clone(),
                             })),

@@ -174,16 +174,38 @@ impl Hocon {
 }
 
 mod unit_format {
-    use nom::*;
+    use nom::character::complete::digit1;
+    use nom::combinator::opt;
+    use nom::combinator::recognize;
+    use nom::number::complete::recognize_float;
+    use nom::sequence::tuple;
+    use nom::IResult;
+    use nom::ParseTo;
 
-    named!(
-        parse_float<types::CompleteStr, f64>,
-        complete!(flat_map!(recognize_float, parse_to!(f64)))
-    );
+    fn parse_float(input: &str) -> IResult<&str, Option<f64>> {
+        // Try recognize_float first for normal cases
+        match recognize_float::<_, nom::error::Error<&str>>(input) {
+            Ok((remaining, parsed)) => {
+                let parsed = parsed.parse_to();
+                Ok((remaining, parsed))
+            }
+            Err(_) => {
+                // Handle edge case: "8EB" where E looks like scientific notation
+                // but is actually a unit. Fall back to simple number parsing.
+                let (remaining, parsed) = recognize(tuple((
+                    opt(nom::character::complete::char('-')),
+                    digit1,
+                    opt(tuple((nom::character::complete::char('.'), digit1))),
+                )))(input)?;
+                let parsed: Option<f64> = parsed.parse().ok();
+                Ok((remaining, parsed))
+            }
+        }
+    }
 
     pub(crate) fn value_and_unit(s: &str) -> Option<(f64, &str)> {
-        match parse_float(types::CompleteStr(s)) {
-            Ok((remaining, float)) => Some((float, &remaining)),
+        match parse_float(s) {
+            Ok((remaining, Some(float))) => Some((float, remaining)),
             _ => None,
         }
     }
@@ -552,16 +574,16 @@ impl Hocon {
     /// # Errors
     ///
     /// * [`Error::Deserialization`](enum.Error.html#variant.Deserialization) if there was a
-    /// serde error during deserialization (missing required field, type issue, ...)
+    ///   serde error during deserialization (missing required field, type issue, ...)
     ///
     /// # Additional errors in strict mode
     ///
     /// * [`Error::Include`](enum.Error.html#variant.Include) if there was an issue with an
-    /// included file
+    ///   included file
     /// * [`Error::KeyNotFound`](enum.Error.html#variant.KeyNotFound) if there is a substitution
-    /// with a key that is not present in the document
+    ///   with a key that is not present in the document
     /// * [`Error::DisabledExternalUrl`](enum.Error.html#variant.DisabledExternalUrl) if crate
-    /// was built without feature `url-support` and an `include url("...")` was found
+    ///   was built without feature `url-support` and an `include url("...")` was found
     #[cfg(feature = "serde-support")]
     pub fn resolve<'de, T>(self) -> Result<T, crate::Error>
     where

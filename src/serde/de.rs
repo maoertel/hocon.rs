@@ -1,6 +1,7 @@
 //! Deserializer methods using serde
 
-use super::error::{Error, Result};
+use super::error::Error;
+use super::error::Result;
 use crate::Hocon;
 
 pub use super::wrappers;
@@ -169,7 +170,7 @@ struct Deserializer<R> {
     current_field: Index,
     as_key: bool,
 }
-impl<'de, R> Deserializer<R>
+impl<R> Deserializer<R>
 where
     R: Read,
 {
@@ -182,7 +183,7 @@ where
     }
 }
 
-impl<'de, 'a, R: Read> serde::de::Deserializer<'de> for &'a mut Deserializer<R> {
+impl<'de, R: Read> serde::de::Deserializer<'de> for &mut Deserializer<R> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>

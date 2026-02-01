@@ -6,7 +6,9 @@ use std::rc::Rc;
 
 use crate::HoconLoaderConfig;
 
-use super::intermediate::{Child, HoconIntermediate, Node};
+use super::intermediate::Child;
+use super::intermediate::HoconIntermediate;
+use super::intermediate::Node;
 use super::value::HoconValue;
 
 pub(crate) enum Include<'a> {
@@ -45,9 +47,9 @@ impl HoconInternal {
                 .map(|(path, value)| {
                     (
                         path.split('.')
-                            .map(|s| HoconValue::String(String::from(s)))
+                            .map(|s| HoconValue::String(Rc::from(s)))
                             .collect(),
-                        HoconValue::String(value),
+                        HoconValue::String(Rc::from(value)),
                     )
                 })
                 .collect(),
@@ -151,14 +153,14 @@ impl HoconInternal {
         if config.include_depth > config.max_include_depth {
             Ok(Self {
                 internal: vec![(
-                    vec![HoconValue::String(included.included().to_string())],
+                    vec![HoconValue::String(Rc::from(included.included().as_ref()))],
                     bad_value_or_err!(config, crate::Error::TooManyIncludes),
                 )],
             })
         } else if config.file_meta.is_none() {
             Ok(Self {
                 internal: vec![(
-                    vec![HoconValue::String(included.included().to_string())],
+                    vec![HoconValue::String(Rc::from(included.included().as_ref()))],
                     bad_value_or_err!(config, crate::Error::IncludeNotAllowedFromStr),
                 )],
             })
@@ -197,7 +199,7 @@ impl HoconInternal {
                                 path.clone(),
                                 HoconValue::Included {
                                     value: Box::new(value),
-                                    original_path: path,
+                                    original_path: path.into(),
                                     include_root: None,
                                 },
                             )
@@ -206,7 +208,7 @@ impl HoconInternal {
                 }),
                 Err(error) => Ok(Self {
                     internal: vec![(
-                        vec![HoconValue::String(included.included().to_string())],
+                        vec![HoconValue::String(Rc::from(included.included().as_ref()))],
                         bad_value_or_err!(config, error),
                     )],
                 }),
@@ -242,7 +244,7 @@ impl HoconInternal {
             internal: self
                 .internal
                 .into_iter()
-                .map(|(k, v)| (transform(k, v)))
+                .map(|(k, v)| transform(k, v))
                 .collect(),
         }
     }
@@ -274,7 +276,7 @@ impl HoconInternal {
                     HoconValue::UnquotedString(s) => s
                         .trim()
                         .split('.')
-                        .map(|s| HoconValue::String(String::from(s)))
+                        .map(|s| HoconValue::String(Rc::from(s)))
                         .collect(),
                     _ => vec![path_item],
                 })
@@ -305,22 +307,22 @@ impl HoconInternal {
                         .collect();
                     let existing_array = concatenated_arrays
                         .entry(concat_root.clone())
-                        .or_insert_with(HashMap::new);
+                        .or_default();
                     let nb_elems = existing_array.keys().len();
                     let idx = existing_array
-                        .entry(HoconValue::String(item_id.clone()))
+                        .entry(HoconValue::String(Rc::clone(&item_id)))
                         .or_insert(nb_elems as i64);
                     (
                         value.substitute(config, &root, &full_path),
                         concat_root
                             .into_iter()
                             .chain(std::iter::once(HoconValue::Integer(*idx)))
-                            .chain(original_path.into_iter().flat_map(|path_item| {
+                            .chain(original_path.iter().cloned().flat_map(|path_item| {
                                 match path_item {
                                     HoconValue::UnquotedString(s) => s
                                         .trim()
                                         .split('.')
-                                        .map(|s| HoconValue::String(String::from(s)))
+                                        .map(|s| HoconValue::String(Rc::from(s)))
                                         .collect(),
                                     _ => vec![path_item],
                                 }
@@ -344,7 +346,7 @@ impl HoconInternal {
                         if let HoconValue::Integer(idx) = item {
                             concatenated_arrays
                                 .entry(checked_path.clone())
-                                .or_insert_with(HashMap::new)
+                                .or_default()
                                 .entry(HoconValue::Integer(idx))
                                 .or_insert(idx);
                         }
@@ -496,7 +498,7 @@ mod tests {
             val,
             HoconInternal {
                 internal: vec![(
-                    vec![HoconValue::String(String::from("file.conf"))],
+                    vec![HoconValue::String(Rc::from("file.conf"))],
                     HoconValue::BadValue(crate::Error::TooManyIncludes)
                 )]
             }
@@ -521,7 +523,7 @@ mod tests {
             val,
             HoconInternal {
                 internal: vec![(
-                    vec![HoconValue::String(String::from("file.conf"))],
+                    vec![HoconValue::String(Rc::from("file.conf"))],
                     HoconValue::BadValue(crate::Error::Include {
                         path: String::from("file.conf")
                     })
