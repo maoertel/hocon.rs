@@ -177,30 +177,22 @@ mod unit_format {
     use nom::character::complete::digit1;
     use nom::combinator::opt;
     use nom::combinator::recognize;
-    use nom::number::complete::recognize_float;
-    use nom::sequence::tuple;
+    use nom::sequence::pair;
     use nom::IResult;
-    use nom::ParseTo;
+    use nom::Parser;
 
     fn parse_float(input: &str) -> IResult<&str, Option<f64>> {
-        // Try recognize_float first for normal cases
-        match recognize_float::<_, nom::error::Error<&str>>(input) {
-            Ok((remaining, parsed)) => {
-                let parsed = parsed.parse_to();
-                Ok((remaining, parsed))
-            }
-            Err(_) => {
-                // Handle edge case: "8EB" where E looks like scientific notation
-                // but is actually a unit. Fall back to simple number parsing.
-                let (remaining, parsed) = recognize(tuple((
-                    opt(nom::character::complete::char('-')),
-                    digit1,
-                    opt(tuple((nom::character::complete::char('.'), digit1))),
-                )))(input)?;
-                let parsed: Option<f64> = parsed.parse().ok();
-                Ok((remaining, parsed))
-            }
-        }
+        // Parse a number: [-]digits[.digits]
+        // We don't use recognize_float because it accepts scientific notation like "8E10"
+        // which conflicts with units like "8EB" (8 exabytes)
+        let (remaining, parsed) = recognize((
+            opt(nom::character::complete::char('-')),
+            digit1,
+            opt(pair(nom::character::complete::char('.'), digit1)),
+        ))
+        .parse(input)?;
+        let parsed: Option<f64> = parsed.parse().ok();
+        Ok((remaining, parsed))
     }
 
     pub(crate) fn value_and_unit(s: &str) -> Option<(f64, &str)> {
