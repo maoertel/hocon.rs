@@ -188,6 +188,7 @@ mod value;
 pub use value::Hocon;
 mod error;
 pub use error::Error;
+pub use error::Result;
 pub(crate) mod helper;
 mod loader_config;
 pub(crate) use loader_config::*;
@@ -403,7 +404,7 @@ impl HoconLoader {
         }
     }
 
-    pub(crate) fn load_from_str_of_conf_file(self, s: FileRead) -> Result<Self, Error> {
+    pub(crate) fn load_from_str_of_conf_file(self, s: FileRead) -> Result<Self> {
         Ok(Self {
             internal: self.internal.add(self.config.parse_str_to_internal(s)?),
             config: self.config,
@@ -421,7 +422,7 @@ impl HoconLoader {
     ///
     /// * [`Error::IncludeNotAllowedFromStr`](enum.Error.html#variant.IncludeNotAllowedFromStr)
     ///   if there is an include in the string
-    pub fn load_str(self, s: &str) -> Result<Self, Error> {
+    pub fn load_str(self, s: &str) -> Result<Self> {
         self.load_from_str_of_conf_file(FileRead {
             hocon: Some(String::from(s)),
             ..Default::default()
@@ -441,7 +442,7 @@ impl HoconLoader {
     /// * [`Error::TooManyIncludes`](enum.Error.html#variant.TooManyIncludes)
     ///   if there are too many included files within included files. The limit can be
     ///   changed with [`max_include_depth`](struct.HoconLoader.html#method.max_include_depth)
-    pub fn load_file<P: AsRef<Path>>(&self, path: P) -> Result<Self, Error> {
+    pub fn load_file<P: AsRef<Path>>(&self, path: P) -> Result<Self> {
         let mut file_path = path.as_ref().to_path_buf();
         // pub fn load_file(&self, path: &str) -> Result<Self, Error> {
         // let mut file_path = Path::new(path).to_path_buf();
@@ -479,7 +480,7 @@ impl HoconLoader {
     ///   with a key that is not present in the document
     /// * [`Error::DisabledExternalUrl`](enum.Error.html#variant.DisabledExternalUrl) if crate
     ///   was built without feature `url-support` and an `include url("...")` was found
-    pub fn hocon(self) -> Result<Hocon, Error> {
+    pub fn hocon(self) -> Result<Hocon> {
         let config = &self.config;
         self.internal.merge(config)?.finalize(config)
     }
@@ -500,7 +501,7 @@ impl HoconLoader {
     /// * [`Error::DisabledExternalUrl`](enum.Error.html#variant.DisabledExternalUrl) if crate
     ///   was built without feature `url-support` and an `include url("...")` was found
     #[cfg(feature = "serde-support")]
-    pub fn resolve<'de, T>(self) -> Result<T, Error>
+    pub fn resolve<'de, T>(self) -> Result<T>
     where
         T: ::serde::Deserialize<'de>,
     {

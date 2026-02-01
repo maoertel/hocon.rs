@@ -1,5 +1,8 @@
 use thiserror::Error;
 
+/// A Result type alias using this crate's Error type
+pub type Result<T> = std::result::Result<T, Error>;
+
 /// Errors that can be encountered while reading a HOCON document
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum Error {

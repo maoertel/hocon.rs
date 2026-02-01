@@ -175,7 +175,8 @@ impl Hocon {
 
 mod unit_format {
     use nom::character::complete::digit1;
-    use nom::combinator::{opt, recognize};
+    use nom::combinator::opt;
+    use nom::combinator::recognize;
     use nom::number::complete::recognize_float;
     use nom::sequence::tuple;
     use nom::IResult;

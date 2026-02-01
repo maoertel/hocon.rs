@@ -1,18 +1,76 @@
 use std::borrow::Cow;
+use std::rc::Rc;
 
 use nom::branch::alt;
-use nom::bytes::complete::{tag, take_until};
-use nom::character::complete::{char, multispace0, newline, none_of, one_of};
-use nom::combinator::{not, opt, recognize, value as nom_value};
+use nom::bytes::complete::tag;
+use nom::bytes::complete::take_until;
+use nom::character::complete::char;
+use nom::character::complete::multispace0;
+use nom::character::complete::newline;
+use nom::character::complete::none_of;
+use nom::character::complete::one_of;
+use nom::combinator::not;
+use nom::combinator::opt;
+use nom::combinator::recognize;
+use nom::combinator::value as nom_value;
+use nom::error::Error as NomError;
+use nom::error::ErrorKind;
 use nom::error::ParseError;
-use nom::multi::{many0, many1, separated_list0};
+use nom::multi::many0;
+use nom::multi::many1;
+use nom::multi::separated_list0;
 use nom::number::complete::recognize_float;
-use nom::sequence::{delimited, pair, tuple};
+use nom::sequence::delimited;
+use nom::sequence::pair;
+use nom::sequence::tuple;
+use nom::Err as NomErr;
 use nom::IResult;
 use nom::Parser;
 
-use crate::internals::{unescape, Hash, HoconInternal, HoconValue, Include};
+use crate::helper;
+use crate::internals::unescape;
+use crate::internals::Hash;
+use crate::internals::HoconInternal;
+use crate::internals::HoconValue;
+use crate::internals::Include;
 use crate::HoconLoaderConfig;
+use crate::Result;
+
+
+/// Root parser - the main entry point for parsing HOCON documents.
+pub(crate) fn root<'a>(
+    config: &'a HoconLoaderConfig,
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal>> {
+    move |input| {
+        let (input, _) = possible_comment(input)?;
+
+        // Try root_include first
+        if let Ok((remaining, result)) = root_include(config)(input) {
+            let (remaining, _) = possible_comment(remaining)?;
+            return Ok((remaining, result));
+        }
+
+        // Try root_hash (object without braces)
+        if let Ok((remaining, h)) = root_hash(config)(input) {
+            let (remaining, _) = possible_comment(remaining)?;
+            return Ok((remaining, h.map(HoconInternal::from_object)));
+        }
+
+        // Try hash (object with braces)
+        if let Ok((remaining, h)) = hash(config)(input) {
+            let (remaining, _) = possible_comment(remaining)?;
+            return Ok((remaining, h.map(HoconInternal::from_object)));
+        }
+
+        // Try array
+        if let Ok((remaining, a)) = array(config)(input) {
+            let (remaining, _) = possible_comment(remaining)?;
+            return Ok((remaining, a.map(HoconInternal::from_array)));
+        }
+
+        Err(NomErr::Error(NomError::new(input, ErrorKind::Alt)))
+    }
+}
 
 // ============================================================================
 // Basic whitespace and comment parsers
@@ -75,10 +133,7 @@ fn integer(input: &str) -> IResult<&str, i64> {
     let (remaining, parsed) = recognize_float(input)?;
     match parsed.parse::<i64>() {
         Ok(val) => Ok((remaining, val)),
-        Err(_) => Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Digit,
-        ))),
+        Err(_) => Err(NomErr::Error(NomError::new(input, ErrorKind::Digit))),
     }
 }
 
@@ -86,17 +141,8 @@ fn float(input: &str) -> IResult<&str, f64> {
     let (remaining, parsed) = recognize_float(input)?;
     match parsed.parse::<f64>() {
         Ok(val) => Ok((remaining, val)),
-        Err(_) => Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Float,
-        ))),
+        Err(_) => Err(NomErr::Error(NomError::new(input, ErrorKind::Float))),
     }
-}
-
-#[allow(dead_code)]
-fn null(input: &str) -> IResult<&str, Option<()>> {
-    let (remaining, _) = tag("null")(input)?;
-    Ok((remaining, Some(())))
 }
 
 fn boolean(input: &str) -> IResult<&str, bool> {
@@ -128,10 +174,7 @@ where
         if count >= min {
             Ok((&input[end_idx..], &input[..end_idx]))
         } else {
-            Err(nom::Err::Error(nom::error::Error::new(
-                input,
-                nom::error::ErrorKind::TakeWhileMN,
-            )))
+            Err(NomErr::Error(NomError::new(input, ErrorKind::TakeWhileMN)))
         }
     }
 }
@@ -189,10 +232,7 @@ fn multiline_string(input: &str) -> IResult<&str, &str> {
     }
 
     // No closing """ found
-    Err(nom::Err::Error(nom::error::Error::new(
-        input,
-        nom::error::ErrorKind::TakeUntil,
-    )))
+    Err(NomErr::Error(NomError::new(input, ErrorKind::TakeUntil)))
 }
 
 fn unquoted_string(input: &str) -> IResult<&str, &str> {
@@ -238,10 +278,7 @@ fn unquoted_string(input: &str) -> IResult<&str, &str> {
     }
 
     if end == 0 {
-        return Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::TakeWhile1,
-        )));
+        return Err(NomErr::Error(NomError::new(input, ErrorKind::TakeWhile1)));
     }
 
     Ok((&input[end..], &input[..end]))
@@ -271,8 +308,8 @@ fn optional_path_substitution(input: &str) -> IResult<&str, HoconValue> {
 
 fn single_value(input: &str) -> IResult<&str, HoconValue> {
     alt((
-        multiline_string.map(|s| HoconValue::String(String::from(s))),
-        string.map(|s: Cow<str>| HoconValue::String(s.into_owned())),
+        multiline_string.map(|s| HoconValue::String(Rc::from(s))),
+        string.map(|s: Cow<str>| HoconValue::String(Rc::from(s.as_ref()))),
         integer.map(HoconValue::Integer),
         float.map(HoconValue::Real),
         boolean.map(HoconValue::Boolean),
@@ -286,7 +323,7 @@ fn single_value(input: &str) -> IResult<&str, HoconValue> {
             optional: false,
             original: None,
         }),
-        unquoted_string.map(|s| HoconValue::UnquotedString(String::from(s))),
+        unquoted_string.map(|s| HoconValue::UnquotedString(Rc::from(s))),
     ))(input)
 }
 
@@ -350,7 +387,7 @@ fn closing(input: &str, closing_char: char) -> IResult<&str, ()> {
 /// Helper function to parse colon or equals separator
 fn colon_or_equals(input: &str) -> IResult<&str, char> {
     let (input, _) = multispace0(input)?;
-    let result = alt((char::<&str, nom::error::Error<&str>>(':'), char('=')))(input);
+    let result = alt((char::<&str, NomError<&str>>(':'), char('=')))(input);
     match result {
         Ok((remaining, c)) => {
             let (remaining, _) = multispace0(remaining)?;
@@ -391,7 +428,7 @@ fn include_parser(input: &str) -> IResult<&str, Include<'_>> {
 
 fn key_value<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
         let (input, _) = ws(possible_comment).parse(input)?;
 
@@ -405,14 +442,13 @@ fn key_value<'a>(
 
         // Try quoted string key with separator (:, =, or +=)
         if let Ok((remaining, key)) = ws(string).parse(input) {
-            let key_str = key.into_owned();
+            let key_str: Rc<str> = Rc::from(key.as_ref());
 
             // Check for +=
-            if let Ok((remaining, _)) =
-                ws(tag::<&str, &str, nom::error::Error<&str>>("+=")).parse(remaining)
+            if let Ok((remaining, _)) = ws(tag::<&str, &str, NomError<&str>>("+=")).parse(remaining)
             {
                 let (remaining, val) = wrapper(config)(remaining)?;
-                let item_id = uuid::Uuid::new_v4().hyphenated().to_string();
+                let item_id: Rc<str> = Rc::from(uuid::Uuid::new_v4().hyphenated().to_string());
                 return Ok((
                     remaining,
                     val.map(|h| {
@@ -423,11 +459,11 @@ fn key_value<'a>(
                                     HoconValue::ToConcatToArray {
                                         value: Box::new(v),
                                         original_path: k,
-                                        item_id: item_id.clone(),
+                                        item_id: Rc::clone(&item_id),
                                     },
                                 )
                             })
-                            .add_to_path(vec![HoconValue::String(key_str.clone())])
+                            .add_to_path(vec![HoconValue::String(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
@@ -440,7 +476,7 @@ fn key_value<'a>(
                     remaining,
                     val.map(|h| {
                         HoconInternal::from_object(h.internal)
-                            .add_to_path(vec![HoconValue::String(key_str.clone())])
+                            .add_to_path(vec![HoconValue::String(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
@@ -452,7 +488,7 @@ fn key_value<'a>(
                     remaining,
                     h.map(|hash| {
                         HoconInternal::from_object(hash)
-                            .add_to_path(vec![HoconValue::String(key_str.clone())])
+                            .add_to_path(vec![HoconValue::String(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
@@ -461,14 +497,13 @@ fn key_value<'a>(
 
         // Try unquoted string key with separator (:, =, or +=)
         if let Ok((remaining, key)) = ws(unquoted_string).parse(input) {
-            let key_str = String::from(key);
+            let key_str: Rc<str> = Rc::from(key);
 
             // Check for +=
-            if let Ok((remaining, _)) =
-                ws(tag::<&str, &str, nom::error::Error<&str>>("+=")).parse(remaining)
+            if let Ok((remaining, _)) = ws(tag::<&str, &str, NomError<&str>>("+=")).parse(remaining)
             {
                 let (remaining, val) = wrapper(config)(remaining)?;
-                let item_id = uuid::Uuid::new_v4().hyphenated().to_string();
+                let item_id: Rc<str> = Rc::from(uuid::Uuid::new_v4().hyphenated().to_string());
                 return Ok((
                     remaining,
                     val.map(|h| {
@@ -479,11 +514,11 @@ fn key_value<'a>(
                                     HoconValue::ToConcatToArray {
                                         value: Box::new(v),
                                         original_path: k,
-                                        item_id: item_id.clone(),
+                                        item_id: Rc::clone(&item_id),
                                     },
                                 )
                             })
-                            .add_to_path(vec![HoconValue::UnquotedString(key_str.clone())])
+                            .add_to_path(vec![HoconValue::UnquotedString(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
@@ -496,7 +531,7 @@ fn key_value<'a>(
                     remaining,
                     val.map(|h| {
                         HoconInternal::from_object(h.internal)
-                            .add_to_path(vec![HoconValue::UnquotedString(key_str.clone())])
+                            .add_to_path(vec![HoconValue::UnquotedString(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
@@ -508,17 +543,14 @@ fn key_value<'a>(
                     remaining,
                     h.map(|hash| {
                         HoconInternal::from_object(hash)
-                            .add_to_path(vec![HoconValue::UnquotedString(key_str.clone())])
+                            .add_to_path(vec![HoconValue::UnquotedString(Rc::clone(&key_str))])
                             .internal
                     }),
                 ));
             }
         }
 
-        Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Alt,
-        )))
+        Err(NomErr::Error(NomError::new(input, ErrorKind::Alt)))
     }
 }
 
@@ -528,16 +560,16 @@ fn key_value<'a>(
 
 fn separated_hashlist<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<Hash>, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<Hash>>> {
     move |input| {
         let (input, parsed) = separated_list0(separators, key_value(config))(input)?;
-        Ok((input, crate::helper::extract_result(parsed)))
+        Ok((input, helper::extract_result(parsed)))
     }
 }
 
 fn hash<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
         let (input, _) = space(input)?;
         let (input, _) = char('{')(input)?;
@@ -554,7 +586,7 @@ fn hash<'a>(
 
 fn hashes<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
         let (input, maybe_substitution) = opt(path_substitution)(input)?;
         let (input, first_hash) = hash(config)(input)?;
@@ -562,7 +594,7 @@ fn hashes<'a>(
 
         let result = match (maybe_substitution, remaining_hashes.is_empty()) {
             (None, true) => first_hash,
-            (None, false) => match (first_hash, crate::helper::extract_result(remaining_hashes)) {
+            (None, false) => match (first_hash, helper::extract_result(remaining_hashes)) {
                 (Ok(mut values), Ok(hashes)) => {
                     hashes.into_iter().for_each(|mut h| values.append(&mut h));
                     Ok(values)
@@ -578,7 +610,7 @@ fn hashes<'a>(
                         original: None,
                     },
                 )];
-                match (first_hash, crate::helper::extract_result(remaining_hashes)) {
+                match (first_hash, helper::extract_result(remaining_hashes)) {
                     (Ok(mut fh), Ok(hashes)) => {
                         values.append(&mut fh);
                         hashes.into_iter().for_each(|mut h| values.append(&mut h));
@@ -595,7 +627,7 @@ fn hashes<'a>(
 
 fn root_hash<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
         let (input, _) = space(input)?;
         // Make sure it doesn't start with '{'
@@ -616,20 +648,20 @@ fn root_hash<'a>(
 
 fn array<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>>> {
     move |input| {
         let (input, _) = sp(char('['))(input)?;
         let (input, _) = multispace0(input)?;
         let (input, items) = separated_list0(separators, wrapper(config))(input)?;
         let (input, _) = closing(input, ']')?;
 
-        Ok((input, crate::helper::extract_result(items)))
+        Ok((input, helper::extract_result(items)))
     }
 }
 
 fn arrays<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>>> {
     move |input| {
         let (input, maybe_substitution) = opt(path_substitution)(input)?;
         let (input, first_array) = array(config)(input)?;
@@ -637,7 +669,7 @@ fn arrays<'a>(
 
         let result = match (maybe_substitution, remaining_arrays.is_empty()) {
             (None, true) => first_array,
-            (None, false) => match (first_array, crate::helper::extract_result(remaining_arrays)) {
+            (None, false) => match (first_array, helper::extract_result(remaining_arrays)) {
                 (Ok(mut values), Ok(arrays)) => {
                     arrays
                         .into_iter()
@@ -650,7 +682,7 @@ fn arrays<'a>(
                 let mut values = vec![HoconInternal::from_value(
                     HoconValue::PathSubstitutionInParent(Box::new(subst)),
                 )];
-                match (first_array, crate::helper::extract_result(remaining_arrays)) {
+                match (first_array, helper::extract_result(remaining_arrays)) {
                     (Ok(mut fa), Ok(arrays)) => {
                         values.append(&mut fa);
                         arrays
@@ -673,7 +705,7 @@ fn arrays<'a>(
 
 fn wrapper<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal>> {
     move |input| {
         let (input, _) = possible_comment(input)?;
 
@@ -704,7 +736,7 @@ fn wrapper<'a>(
 
 fn root_include<'a>(
     config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal, crate::Error>> {
+) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal>> {
     move |input| {
         let (input, included) = ws(include_parser).parse(input)?;
         let (input, doc) = root(config)(input)?;
@@ -712,40 +744,3 @@ fn root_include<'a>(
     }
 }
 
-/// Root parser - the main entry point for parsing HOCON documents.
-pub(crate) fn root<'a>(
-    config: &'a HoconLoaderConfig,
-) -> impl FnMut(&'a str) -> IResult<&'a str, Result<HoconInternal, crate::Error>> {
-    move |input| {
-        let (input, _) = possible_comment(input)?;
-
-        // Try root_include first
-        if let Ok((remaining, result)) = root_include(config)(input) {
-            let (remaining, _) = possible_comment(remaining)?;
-            return Ok((remaining, result));
-        }
-
-        // Try root_hash (object without braces)
-        if let Ok((remaining, h)) = root_hash(config)(input) {
-            let (remaining, _) = possible_comment(remaining)?;
-            return Ok((remaining, h.map(HoconInternal::from_object)));
-        }
-
-        // Try hash (object with braces)
-        if let Ok((remaining, h)) = hash(config)(input) {
-            let (remaining, _) = possible_comment(remaining)?;
-            return Ok((remaining, h.map(HoconInternal::from_object)));
-        }
-
-        // Try array
-        if let Ok((remaining, a)) = array(config)(input) {
-            let (remaining, _) = possible_comment(remaining)?;
-            return Ok((remaining, a.map(HoconInternal::from_array)));
-        }
-
-        Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::Alt,
-        )))
-    }
-}

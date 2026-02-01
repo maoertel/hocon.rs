@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::{Hocon, HoconLoaderConfig};
+use crate::Hocon;
+use crate::HoconLoaderConfig;
 
 use super::value::HoconValue;
 

@@ -1,6 +1,7 @@
 //! Deserializer methods using serde
 
-use super::error::{Error, Result};
+use super::error::Error;
+use super::error::Result;
 use crate::Hocon;
 
 pub use super::wrappers;
