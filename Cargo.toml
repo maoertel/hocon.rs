@@ -1,18 +1,15 @@
 [package]
 name = "hocon"
-version = "0.9.0"
-authors = ["François Mockers <mockersf@gmail.com>"]
-edition = "2018"
+version = "0.10.0"
+authors = ["François Mockers <mockersf@gmail.com>", "Mathias Oertel <mathias.oertel@gmail.com>"]
+edition = "2024"
 description = "Reads HOCON configuration files"
-repository = "https://github.com/mockersf/hocon.rs"
-homepage = "https://github.com/mockersf/hocon.rs"
+repository = "https://github.com/maoertel/hocon.rs"
+homepage = "https://github.com/maoertel/hocon.rs"
 documentation = "https://docs.rs/hocon"
 keywords = ["hocon", "configuration"]
 license = "MIT"
 readme = "README.md"
-
-[badges]
-travis-ci = { repository = "mockersf/hocon.rs" }
 
 [dependencies]
 thiserror = "2.0"

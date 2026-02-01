@@ -143,12 +143,12 @@ impl HoconRead {
 }
 impl Read for HoconRead {
     fn get_attribute_value(&self, index: &Index) -> Option<&Hocon> {
-        match *index {
-            Index::String(ref key) => match &self.hocon[key.as_ref()] {
+        match index {
+            Index::String(key) => match &self.hocon[key.as_ref()] {
                 Hocon::BadValue(_) => None,
                 v => Some(v),
             },
-            Index::Number(key) => match &self.hocon[key] {
+            Index::Number(key) => match &self.hocon[*key] {
                 Hocon::BadValue(_) => None,
                 v => Some(v),
             },
@@ -279,7 +279,7 @@ impl<'de, R: Read> serde::de::Deserializer<'de> for &mut Deserializer<R> {
     {
         if self.as_key {
             match &self.current_field {
-                Index::String(ref key) => visitor.visit_str(key),
+                Index::String(key) => visitor.visit_str(key),
                 _ => visitor.visit_str(""),
             }
         } else if let Some(field) = self.read.get_attribute_value(&self.current_field) {
@@ -446,7 +446,7 @@ impl<'de, R: Read> serde::de::Deserializer<'de> for &mut Deserializer<R> {
                     _ => {
                         return Err(Error {
                             message: format!("invalid type for field \"{}\"", self.current_field),
-                        })
+                        });
                     }
                 };
                 let mut des = Deserializer::new(HoconRead::new(hc));
@@ -484,7 +484,7 @@ impl<'de, R: Read> serde::de::Deserializer<'de> for &mut Deserializer<R> {
             })?
             .clone();
 
-        if let Index::String(ref s) = self.current_field {
+        if let Index::String(s) = &self.current_field {
             for v in variants {
                 if s == v {
                     let reader = HoconRead::new(hc);

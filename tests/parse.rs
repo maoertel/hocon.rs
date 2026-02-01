@@ -1,5 +1,5 @@
-use rand::distr::Alphanumeric;
 use rand::Rng;
+use rand::distr::Alphanumeric;
 
 use hocon::{Error, Hocon, HoconLoader};
 use linked_hash_map::LinkedHashMap;
@@ -69,8 +69,7 @@ fn parse_string_strict_with_windows_newline() {
     assert_eq!(doc["b"].as_string().expect("during test"), "other");
 
     // let s = "title = \"test\"\r\n\r\nchild1 {\r\nhome = \"./dir1\"\r\n}\r\n\r\nchild2 {\r\nhome = \"./dir2\"\r\n}";
-    let s =
-        "title = \"test\"\r\n\r\nchild1 {\r\nhome = \"./dir1\"\r\n}\r\n\nchild2 {\nhome = \"./dir2\"\n}";
+    let s = "title = \"test\"\r\n\r\nchild1 {\r\nhome = \"./dir1\"\r\n}\r\n\nchild2 {\nhome = \"./dir2\"\n}";
     let doc: Hocon = dbg!(HoconLoader::new().strict().load_str(dbg!(s)))
         .expect("during test")
         .hocon()
@@ -520,7 +519,8 @@ fn environment_variable() {
         .take(30)
         .map(char::from)
         .collect();
-    std::env::set_var(&env_name, &env_value);
+    // SAFETY: This is a single-threaded test
+    unsafe { std::env::set_var(&env_name, &env_value) };
 
     let s = format!(r#"{{"var" : ${{{}}} }}"#, env_name);
     let doc: Hocon = dbg!(HoconLoader::new().load_str(dbg!(&s)))
@@ -562,7 +562,8 @@ fn environment_variable_with_default_value() {
     assert!(doc["var"].as_string().is_some());
     assert_eq!(doc["var"].as_string().expect("during test"), "default");
 
-    std::env::set_var(&env_name, &env_value);
+    // SAFETY: This is a single-threaded test
+    unsafe { std::env::set_var(&env_name, &env_value) };
     let doc: Hocon = dbg!(HoconLoader::new().load_str(dbg!(&s)))
         .expect("during test")
         .hocon()
@@ -615,7 +616,8 @@ fn environment_variable_with_default_value_complex() {
         "default"
     );
 
-    std::env::set_var(&env_name, &env_value);
+    // SAFETY: This is a single-threaded test
+    unsafe { std::env::set_var(&env_name, &env_value) };
     let doc: Hocon = dbg!(HoconLoader::new().load_str(dbg!(&s)))
         .expect("during test")
         .hocon()
@@ -634,7 +636,8 @@ fn environment_variable_with_default_value_complex() {
 
 #[test]
 fn environment_variable_disabled() {
-    std::env::set_var("MY_VAR_TO_TEST", "GREAT_VALUE");
+    // SAFETY: This is a single-threaded test
+    unsafe { std::env::set_var("MY_VAR_TO_TEST", "GREAT_VALUE") };
 
     let s = r#"{"var" : ${MY_VAR_TO_TEST} }"#;
     let doc: Hocon = dbg!(HoconLoader::new().no_system().load_str(dbg!(s)))
@@ -780,9 +783,11 @@ fn parse_concat_arrays_with_substitution() {
         a : [ 1, 2 ]
         b : ${a} [ 3, 4 ]
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"][0].as_i64().expect("during test"), 1);
@@ -800,9 +805,11 @@ fn parse_concat_arrays_with_substitution_and_replace() {
         b : ${a} [ 3, 4 ]
         b : [ 5, 6 ]
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"][0].as_i64().expect("during test"), 1);
@@ -819,9 +826,11 @@ fn parse_replace_array() {
         a : [ 1, 2, 3, 4 ]
         a : [ 5, 6 ]
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"][0].as_i64().expect("during test"), 5);
@@ -900,9 +909,11 @@ fn parse_concat_arrays_with_plus_equal() {
         a += 1
         a += 2
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"][0].as_i64().expect("during test"), 1);
@@ -916,9 +927,11 @@ fn parse_concat_arrays_with_plus_equal_with_init() {
         a += 2
         "a" += 3
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"][0].as_i64().expect("during test"), 1);
@@ -934,11 +947,13 @@ fn parse_concat_arrays_with_plus_equal_with_object() {
         a += { b : 3, c : 4 }
         a += { d : 5, f : { g : 6 } }
     }"#;
-    let doc: Hocon = dbg!(HoconLoader::new()
-        .load_str(s)
-        .expect("during test")
-        .hocon()
-        .expect("during test"));
+    let doc: Hocon = dbg!(
+        HoconLoader::new()
+            .load_str(s)
+            .expect("during test")
+            .hocon()
+            .expect("during test")
+    );
 
     assert_eq!(doc["a"][0]["b"].as_i64().expect("during test"), 1);
     assert_eq!(doc["a"][1]["b"].as_i64().expect("during test"), 2);
@@ -953,9 +968,11 @@ fn parse_null_value() {
     let s = r#"{
         a = null
     }"#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["a"], Hocon::Null);
@@ -981,9 +998,11 @@ fn hyphen_keys() {
             }
           }
         "#;
-    let doc: Hocon = dbg!(dbg!(HoconLoader::new().load_str(dbg!(s)))
-        .expect("during test")
-        .hocon())
+    let doc: Hocon = dbg!(
+        dbg!(HoconLoader::new().load_str(dbg!(s)))
+            .expect("during test")
+            .hocon()
+    )
     .expect("during test");
 
     assert_eq!(doc["concurrency"]["server-threads"], Hocon::Integer(16));

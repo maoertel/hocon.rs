@@ -1,6 +1,9 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
+use nom::Err as NomErr;
+use nom::IResult;
+use nom::Parser;
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
@@ -22,18 +25,15 @@ use nom::multi::many1;
 use nom::multi::separated_list0;
 use nom::sequence::delimited;
 use nom::sequence::pair;
-use nom::Err as NomErr;
-use nom::IResult;
-use nom::Parser;
 
+use crate::HoconLoaderConfig;
+use crate::Result;
 use crate::helper;
-use crate::internals::unescape;
 use crate::internals::Hash;
 use crate::internals::HoconInternal;
 use crate::internals::HoconValue;
 use crate::internals::Include;
-use crate::HoconLoaderConfig;
-use crate::Result;
+use crate::internals::unescape;
 
 /// Root parser - the main entry point for parsing HOCON documents.
 pub(crate) fn root<'a>(
@@ -281,10 +281,10 @@ fn unquoted_string(input: &str) -> IResult<&str, &str> {
         if is_special_char(c) {
             break;
         }
-        if c == '/' {
-            if let Some((_, '/')) = chars.peek() {
-                break;
-            }
+        if c == '/'
+            && let Some((_, '/')) = chars.peek()
+        {
+            break;
         }
         end = idx + c.len_utf8();
     }
