@@ -199,7 +199,7 @@ impl HoconInternal {
                                 path.clone(),
                                 HoconValue::Included {
                                     value: Box::new(value),
-                                    original_path: path,
+                                    original_path: path.into(),
                                     include_root: None,
                                 },
                             )
@@ -317,7 +317,7 @@ impl HoconInternal {
                         concat_root
                             .into_iter()
                             .chain(std::iter::once(HoconValue::Integer(*idx)))
-                            .chain(original_path.into_iter().flat_map(|path_item| {
+                            .chain(original_path.iter().cloned().flat_map(|path_item| {
                                 match path_item {
                                     HoconValue::UnquotedString(s) => s
                                         .trim()

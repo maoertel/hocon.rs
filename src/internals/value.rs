@@ -25,7 +25,7 @@ pub(crate) enum HoconValue {
     PathSubstitutionInParent(Box<HoconValue>),
     ToConcatToArray {
         value: Box<HoconValue>,
-        original_path: Vec<HoconValue>,
+        original_path: Rc<[HoconValue]>,
         // an internal id, to keep track of the current parent object in case of an object to concat to an array
         item_id: Rc<str>,
     },
@@ -41,7 +41,7 @@ pub(crate) enum HoconValue {
     Included {
         value: Box<HoconValue>,
         include_root: Option<Vec<HoconValue>>,
-        original_path: Vec<HoconValue>,
+        original_path: Rc<[HoconValue]>,
     },
 }
 

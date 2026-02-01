@@ -454,11 +454,13 @@ fn key_value<'a>(
                     val.map(|h| {
                         HoconInternal::from_object(h.internal)
                             .transform(|k, v| {
+                                // Rc<[T]> makes subsequent clones cheap (ref count bump vs heap alloc)
+                                let original_path: Rc<[HoconValue]> = k.clone().into();
                                 (
-                                    k.clone(),
+                                    k,
                                     HoconValue::ToConcatToArray {
                                         value: Box::new(v),
-                                        original_path: k,
+                                        original_path,
                                         item_id: Rc::clone(&item_id),
                                     },
                                 )
@@ -509,11 +511,13 @@ fn key_value<'a>(
                     val.map(|h| {
                         HoconInternal::from_object(h.internal)
                             .transform(|k, v| {
+                                // Rc<[T]> makes subsequent clones cheap (ref count bump vs heap alloc)
+                                let original_path: Rc<[HoconValue]> = k.clone().into();
                                 (
-                                    k.clone(),
+                                    k,
                                     HoconValue::ToConcatToArray {
                                         value: Box::new(v),
-                                        original_path: k,
+                                        original_path,
                                         item_id: Rc::clone(&item_id),
                                     },
                                 )
