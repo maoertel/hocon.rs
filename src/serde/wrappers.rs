@@ -7,8 +7,8 @@ use std::{
 };
 
 use serde::{
-    de::{self, Deserialize, Visitor},
     Deserializer,
+    de::{self, Deserialize, Visitor},
 };
 
 use crate::Hocon;

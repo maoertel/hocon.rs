@@ -4,10 +4,10 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::internals::HoconInternal;
-use crate::parser;
 use crate::Error;
 use crate::Result;
+use crate::internals::HoconInternal;
+use crate::parser;
 
 #[derive(Debug, Clone)]
 pub(crate) enum FileType {

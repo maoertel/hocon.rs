@@ -174,12 +174,12 @@ impl Hocon {
 }
 
 mod unit_format {
+    use nom::IResult;
+    use nom::Parser;
     use nom::character::complete::digit1;
     use nom::combinator::opt;
     use nom::combinator::recognize;
     use nom::sequence::pair;
-    use nom::IResult;
-    use nom::Parser;
 
     fn parse_float(input: &str) -> IResult<&str, Option<f64>> {
         // Parse a number: [-]digits[.digits]

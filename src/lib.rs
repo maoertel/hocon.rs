@@ -268,7 +268,8 @@ impl HoconLoader {
     /// ```rust
     /// # use hocon::{Hocon, HoconLoader, Error};
     /// # fn main() -> Result<(), Error> {
-    /// # std::env::set_var("SHELL", "/bin/bash");
+    /// # // SAFETY: This is a single-threaded doctest
+    /// # unsafe { std::env::set_var("SHELL", "/bin/bash") };
     /// # let example = r#"{system.shell: ${SHELL}}"#;
     /// assert_eq!(
     ///     HoconLoader::new().load_str(example)?.hocon()?["system"]["shell"],
@@ -517,16 +518,18 @@ mod tests {
     #[test]
     fn read_from_properties() {
         let s = r#"a.b:c"#;
-        let loader = dbg!(HoconLoader {
-            config: HoconLoaderConfig {
-                file_meta: Some(ConfFileMeta::from_path(
-                    Path::new("file.properties").to_path_buf()
-                )),
+        let loader = dbg!(
+            HoconLoader {
+                config: HoconLoaderConfig {
+                    file_meta: Some(ConfFileMeta::from_path(
+                        Path::new("file.properties").to_path_buf()
+                    )),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        }
-        .load_str(s));
+            }
+            .load_str(s)
+        );
         assert!(loader.is_ok());
 
         let doc = loader.expect("during test").hocon().expect("during test");
@@ -536,16 +539,18 @@ mod tests {
     #[test]
     fn read_from_hocon() {
         let s = r#"a.b:c"#;
-        let loader = dbg!(HoconLoader {
-            config: HoconLoaderConfig {
-                file_meta: Some(ConfFileMeta::from_path(
-                    Path::new("file.conf").to_path_buf()
-                )),
+        let loader = dbg!(
+            HoconLoader {
+                config: HoconLoaderConfig {
+                    file_meta: Some(ConfFileMeta::from_path(
+                        Path::new("file.conf").to_path_buf()
+                    )),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        }
-        .load_str(s));
+            }
+            .load_str(s)
+        );
         assert!(loader.is_ok());
 
         let doc: Hocon = loader.expect("during test").hocon().expect("during test");
@@ -662,20 +667,22 @@ mod tests {
     #[cfg(feature = "url-support")]
     #[test]
     fn can_disable_url_include() {
-        let doc = dbg!(HoconLoader::new()
-            .no_url_include()
-            .load_file("tests/data/include_url.conf")
-            .unwrap()
-            .hocon())
+        let doc = dbg!(
+            HoconLoader::new()
+                .no_url_include()
+                .load_file("tests/data/include_url.conf")
+                .unwrap()
+                .hocon()
+        )
         .unwrap();
         assert_eq!(doc["d"], Hocon::BadValue(super::Error::MissingKey));
         assert_eq!(
             doc["https://raw.githubusercontent.com/mockersf/hocon.rs/master/tests/data/basic.conf"],
-            Hocon::BadValue(
-                super::Error::Include {
-                    path: String::from("https://raw.githubusercontent.com/mockersf/hocon.rs/master/tests/data/basic.conf")
-                }
-            )
+            Hocon::BadValue(super::Error::Include {
+                path: String::from(
+                    "https://raw.githubusercontent.com/mockersf/hocon.rs/master/tests/data/basic.conf"
+                )
+            })
         );
     }
 }
