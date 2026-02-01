@@ -13,7 +13,9 @@ fn hocon_to_json(hocon: Hocon) -> Option<Value> {
             if f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
                 Some(Value::Number(Number::from(f as i64)))
             } else {
-                Some(Value::Number(Number::from_f64(f).unwrap_or(Number::from(0))))
+                Some(Value::Number(
+                    Number::from_f64(f).unwrap_or(Number::from(0)),
+                ))
             }
         }
         Hocon::String(s) => Some(Value::String(s)),
