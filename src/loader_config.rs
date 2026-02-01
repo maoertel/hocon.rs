@@ -1,9 +1,13 @@
-use crate::Error;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
+
+use crate::internals::HoconInternal;
+use crate::parser;
+use crate::Error;
+use crate::Result;
 
 #[derive(Debug, Clone)]
 pub(crate) enum FileType {
@@ -114,22 +118,19 @@ impl HoconLoaderConfig {
         }
     }
 
-    pub(crate) fn parse_str_to_internal(
-        &self,
-        s: FileRead,
-    ) -> Result<crate::internals::HoconInternal, Error> {
-        let mut internal = crate::internals::HoconInternal::empty();
+    pub(crate) fn parse_str_to_internal(&self, s: FileRead) -> Result<HoconInternal> {
+        let mut internal = HoconInternal::empty();
         if let Some(properties) = s.properties {
             internal = internal.add(
                 java_properties::read(properties.as_bytes())
-                    .map(crate::internals::HoconInternal::from_properties)
+                    .map(HoconInternal::from_properties)
                     .map_err(|_| Error::Parse)?,
             );
         };
         if let Some(json) = s.json {
             let input = format!("{}\n\0", json.replace('\r', "\n"));
             internal = internal.add(
-                crate::parser::root(self)(&input)
+                parser::root(self)(&input)
                     .map_err(|_| Error::Parse)
                     .and_then(|(remaining, parsed)| {
                         if Self::remaining_only_whitespace(remaining) {
@@ -147,7 +148,7 @@ impl HoconLoaderConfig {
         if let Some(hocon) = s.hocon {
             let input = format!("{}\n\0", hocon.replace('\r', "\n"));
             internal = internal.add(
-                crate::parser::root(self)(&input)
+                parser::root(self)(&input)
                     .map_err(|_| Error::Parse)
                     .and_then(|(remaining, parsed)| {
                         if Self::remaining_only_whitespace(remaining) {
@@ -172,14 +173,14 @@ impl HoconLoaderConfig {
             .all(|c| c == '\n' || c == '\r' || c == '\0')
     }
 
-    pub(crate) fn read_file_to_string(path: PathBuf) -> Result<String, Error> {
+    pub(crate) fn read_file_to_string(path: PathBuf) -> Result<String> {
         let mut file = File::open(path.as_os_str())?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
         Ok(contents)
     }
 
-    pub(crate) fn read_file(&self) -> Result<FileRead, Error> {
+    pub(crate) fn read_file(&self) -> Result<FileRead> {
         let full_path = self
             .file_meta
             .clone()
@@ -217,17 +218,17 @@ impl HoconLoaderConfig {
     }
 
     #[cfg(feature = "url-support")]
-    pub(crate) fn load_url(&self, url: &str) -> Result<crate::internals::HoconInternal, Error> {
+    pub(crate) fn load_url(&self, url: &str) -> Result<HoconInternal> {
         if let Ok(parsed_url) = reqwest::Url::parse(url) {
             if parsed_url.scheme() == "file" {
                 if let Ok(path) = parsed_url.to_file_path() {
                     let include_config = self.included_from().with_file(path);
                     let s = include_config.read_file()?;
-                    Ok(include_config.parse_str_to_internal(s).map_err(|_| {
-                        Error::Include {
+                    Ok(include_config
+                        .parse_str_to_internal(s)
+                        .map_err(|_| Error::Include {
                             path: String::from(url),
-                        }
-                    })?)
+                        })?)
                 } else {
                     Err(Error::Include {
                         path: String::from(url),
