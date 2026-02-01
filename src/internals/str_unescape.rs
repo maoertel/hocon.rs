@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 /// Unescape a JSON string
-pub(crate) fn unescape(input: &str) -> Cow<str> {
+pub(crate) fn unescape(input: &str) -> Cow<'_, str> {
     const PATTERNS: &[&str] = &[
         r#"\""#, r"\\", r"\/", r"\b", r"\f", r"\n", r"\r", r"\t", r"\u",
     ];

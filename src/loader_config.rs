@@ -122,18 +122,19 @@ impl HoconLoaderConfig {
             internal = internal.add(
                 java_properties::read(properties.as_bytes())
                     .map(crate::internals::HoconInternal::from_properties)
-                    .map_err(|_| crate::Error::Parse)?,
+                    .map_err(|_| Error::Parse)?,
             );
         };
         if let Some(json) = s.json {
+            let input = format!("{}\n\0", json.replace('\r', "\n"));
             internal = internal.add(
-                crate::parser::root(format!("{}\n\0", json.replace('\r', "\n")).as_bytes(), self)
-                    .map_err(|_| crate::Error::Parse)
+                crate::parser::root(self)(&input)
+                    .map_err(|_| Error::Parse)
                     .and_then(|(remaining, parsed)| {
                         if Self::remaining_only_whitespace(remaining) {
                             parsed
                         } else if self.strict {
-                            Err(crate::Error::Deserialization {
+                            Err(Error::Deserialization {
                                 message: String::from("file could not be parsed completely"),
                             })
                         } else {
@@ -143,39 +144,31 @@ impl HoconLoaderConfig {
             );
         };
         if let Some(hocon) = s.hocon {
+            let input = format!("{}\n\0", hocon.replace('\r', "\n"));
             internal = internal.add(
-                crate::parser::root(
-                    format!("{}\n\0", hocon.replace('\r', "\n")).as_bytes(),
-                    self,
-                )
-                .map_err(|_| crate::Error::Parse)
-                .and_then(|(remaining, parsed)| {
-                    if Self::remaining_only_whitespace(remaining) {
-                        parsed
-                    } else if self.strict {
-                        Err(crate::Error::Deserialization {
-                            message: String::from("file could not be parsed completely"),
-                        })
-                    } else {
-                        parsed
-                    }
-                })?,
+                crate::parser::root(self)(&input)
+                    .map_err(|_| Error::Parse)
+                    .and_then(|(remaining, parsed)| {
+                        if Self::remaining_only_whitespace(remaining) {
+                            parsed
+                        } else if self.strict {
+                            Err(Error::Deserialization {
+                                message: String::from("file could not be parsed completely"),
+                            })
+                        } else {
+                            parsed
+                        }
+                    })?,
             );
         };
 
         Ok(internal)
     }
 
-    fn remaining_only_whitespace(remaining: &[u8]) -> bool {
+    fn remaining_only_whitespace(remaining: &str) -> bool {
         remaining
-            .iter()
-            .find(|c| {
-                **c != 10 // \n
-                && **c != 13 // \r
-                && **c != 0
-            })
-            .map(|_| false)
-            .unwrap_or(true)
+            .chars()
+            .all(|c| c == '\n' || c == '\r' || c == '\0')
     }
 
     pub(crate) fn read_file_to_string(path: PathBuf) -> Result<String, Error> {
@@ -230,19 +223,19 @@ impl HoconLoaderConfig {
                     let include_config = self.included_from().with_file(path);
                     let s = include_config.read_file()?;
                     Ok(include_config.parse_str_to_internal(s).map_err(|_| {
-                        crate::Error::Include {
+                        Error::Include {
                             path: String::from(url),
                         }
                     })?)
                 } else {
-                    Err(crate::Error::Include {
+                    Err(Error::Include {
                         path: String::from(url),
                     })
                 }
             } else if self.external_url {
                 let body = reqwest::blocking::get(parsed_url)
                     .and_then(reqwest::blocking::Response::text)
-                    .map_err(|_| crate::Error::Include {
+                    .map_err(|_| Error::Include {
                         path: String::from(url),
                     })?;
 
@@ -251,12 +244,12 @@ impl HoconLoaderConfig {
                     ..Default::default()
                 })?)
             } else {
-                Err(crate::Error::Include {
+                Err(Error::Include {
                     path: String::from(url),
                 })
             }
         } else {
-            Err(crate::Error::Include {
+            Err(Error::Include {
                 path: String::from(url),
             })
         }
