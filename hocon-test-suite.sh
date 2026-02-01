@@ -18,7 +18,7 @@ do
     then
         total=$((total + 1))
         filename=`basename $conf_file`
-        cargo run --example hocon2json $conf_file > tmp/output/$filename
+        cargo run --quiet --example hocon2json $conf_file > tmp/output/$filename
         if [ $? -ne 0 ]
         then
             crashes=$((crashes + 1))

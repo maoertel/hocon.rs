@@ -27,7 +27,7 @@ fn hocon_to_json(hocon: Hocon) -> Option<Value> {
 }
 
 fn parse_to_json(path: &str) -> Result<String, Error> {
-    let hocon = dbg!(HoconLoader::new().no_system().load_file(path)?.hocon())?;
+    let hocon = HoconLoader::new().no_system().load_file(path)?.hocon()?;
     let json: Option<_> = hocon_to_json(hocon);
     serde_json::to_string_pretty(&json).map_err(|e| Error::Deserialization {
         message: e.to_string(),
@@ -39,7 +39,7 @@ fn main() {
         None => println!("please provide a HOCON file"),
         Some(file) => println!(
             "{}",
-            dbg!(parse_to_json(&file).unwrap_or_else(|_| String::from("")))
+            parse_to_json(&file).unwrap_or_else(|_| String::from(""))
         ),
     }
 }
