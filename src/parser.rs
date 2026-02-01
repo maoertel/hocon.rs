@@ -22,7 +22,6 @@ use nom::multi::many1;
 use nom::multi::separated_list0;
 use nom::sequence::delimited;
 use nom::sequence::pair;
-use nom::sequence::tuple;
 use nom::Err as NomErr;
 use nom::IResult;
 use nom::Parser;
@@ -83,32 +82,32 @@ fn space(input: &str) -> IResult<&str, ()> {
         tag("\u{00a0}"),
         tag("\u{2007}"),
         tag("\u{202f}"),
-    )))(input)?;
+    )))
+    .parse(input)?;
     Ok((remaining, ()))
 }
 
-fn sp<'a, O, F>(f: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+fn sp<'a, O, F>(mut f: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O>,
+    F: Parser<&'a str, Output = O, Error = NomError<&'a str>>,
 {
-    let mut f = f;
     move |input| {
         let (input, _) = space(input)?;
-        let (input, parsed) = f(input)?;
+        let (input, parsed) = f.parse(input)?;
         let (input, _) = space(input)?;
         Ok((input, parsed))
     }
 }
 
 fn possible_comment(input: &str) -> IResult<&str, Option<()>> {
-    opt(multiline_comment)(input)
+    opt(multiline_comment).parse(input)
 }
 
 fn multiline_comment(input: &str) -> IResult<&str, ()> {
-    let (remaining, _) = many0(newline)(input)?;
+    let (remaining, _) = many0(newline).parse(input)?;
     let (remaining, _) = space(remaining)?;
     let (remaining, _) = comment(remaining)?;
-    let (remaining, _) = many0(alt((newline.map(|_| ()), space_then_comment)))(remaining)?;
+    let (remaining, _) = many0(alt((newline.map(|_| ()), space_then_comment))).parse(remaining)?;
     let (remaining, _) = multispace0(remaining)?;
     Ok((remaining, ()))
 }
@@ -119,8 +118,8 @@ fn space_then_comment(input: &str) -> IResult<&str, ()> {
 }
 
 fn comment(input: &str) -> IResult<&str, ()> {
-    let (remaining, _) = alt((tag("//"), tag("#")))(input)?;
-    let (remaining, _) = take_until("\n")(remaining)?;
+    let (remaining, _) = alt((tag("//"), tag("#"))).parse(input)?;
+    let (remaining, _) = take_until("\n").parse(remaining)?;
     Ok((remaining, ()))
 }
 
@@ -132,12 +131,13 @@ fn comment(input: &str) -> IResult<&str, ()> {
 /// Requires at least one digit before the decimal point (so `.33` is NOT valid, but `0.33` is).
 /// Format: [-]digits[.digits][e[+-]digits]
 fn recognize_number(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((
+    recognize((
         opt(char('-')),
         digit1,
         opt(pair(char('.'), digit1)),
-        opt(tuple((one_of("eE"), opt(one_of("+-")), digit1))),
-    )))(input)
+        opt((one_of("eE"), opt(one_of("+-")), digit1)),
+    ))
+    .parse(input)
 }
 
 fn integer(input: &str) -> IResult<&str, i64> {
@@ -157,7 +157,7 @@ fn float(input: &str) -> IResult<&str, f64> {
 }
 
 fn boolean(input: &str) -> IResult<&str, bool> {
-    alt((nom_value(true, tag("true")), nom_value(false, tag("false"))))(input)
+    alt((nom_value(true, tag("true")), nom_value(false, tag("false")))).parse(input)
 }
 
 // ============================================================================
@@ -195,16 +195,17 @@ fn string(input: &str) -> IResult<&str, Cow<'_, str>> {
         alt((
             recognize(none_of("\\\"\n")),
             recognize(pair(char('\\'), one_of(r#""\/bfnrtu"#))),
-            recognize(tuple((
+            recognize((
                 tag("\\u"),
                 take_while_m_n(0, 4, |c: char| c.is_ascii_hexdigit()),
-            ))),
-        ))(input)
+            )),
+        ))
+        .parse(input)
     }
 
-    let (remaining, _) = char('"')(input)?;
-    let (remaining, content) = recognize(many0(escaped_char))(remaining)?;
-    let (remaining, _) = char('"')(remaining)?;
+    let (remaining, _) = char('"').parse(input)?;
+    let (remaining, content) = recognize(many0(escaped_char)).parse(remaining)?;
+    let (remaining, _) = char('"').parse(remaining)?;
 
     Ok((remaining, unescape(content)))
 }
@@ -215,7 +216,7 @@ fn multiline_string(input: &str) -> IResult<&str, &str> {
     // the extras are part of the string content. For example:
     // """foo"""" parses as foo" (4 quotes at end = 1 content quote + 3 closing)
     // """foo""""" parses as foo"" (5 quotes at end = 2 content quotes + 3 closing)
-    let (remaining, _) = tag("\"\"\"")(input)?;
+    let (remaining, _) = tag("\"\"\"").parse(input)?;
 
     // Find the position where 3+ consecutive quotes end
     // We need to find a sequence of 3+ quotes where what follows is NOT a quote
@@ -300,16 +301,16 @@ fn unquoted_string(input: &str) -> IResult<&str, &str> {
 // ============================================================================
 
 fn path_substitution(input: &str) -> IResult<&str, HoconValue> {
-    let (input, _) = alt((tag("${?"), tag("${")))(input)?;
+    let (input, _) = alt((tag("${?"), tag("${"))).parse(input)?;
     let (input, val) = hocon_value(input)?;
-    let (input, _) = char('}')(input)?;
+    let (input, _) = char('}').parse(input)?;
     Ok((input, val))
 }
 
 fn optional_path_substitution(input: &str) -> IResult<&str, HoconValue> {
-    let (input, _) = tag("${?")(input)?;
+    let (input, _) = tag("${?").parse(input)?;
     let (input, val) = hocon_value(input)?;
-    let (input, _) = char('}')(input)?;
+    let (input, _) = char('}').parse(input)?;
     Ok((input, val))
 }
 
@@ -335,13 +336,14 @@ fn single_value(input: &str) -> IResult<&str, HoconValue> {
             original: None,
         }),
         unquoted_string.map(|s| HoconValue::UnquotedString(Rc::from(s))),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn hocon_value(input: &str) -> IResult<&str, HoconValue> {
     let (input, _) = possible_comment(input)?;
     let (input, first_value) = single_value(input)?;
-    let (input, remaining_values) = many0(single_value)(input)?;
+    let (input, remaining_values) = many0(single_value).parse(input)?;
 
     let result = if remaining_values.is_empty() {
         first_value
@@ -358,9 +360,10 @@ fn hocon_value(input: &str) -> IResult<&str, HoconValue> {
 // Separator and utility parsers
 // ============================================================================
 
-fn ws<'a, O, E: ParseError<&'a str>, F>(f: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+fn ws<'a, O, E, F>(f: F) -> impl Parser<&'a str, Output = O, Error = E>
 where
-    F: Parser<&'a str, O, E>,
+    E: ParseError<&'a str>,
+    F: Parser<&'a str, Output = O, Error = E>,
 {
     delimited(multispace0, f, multispace0)
 }
@@ -374,7 +377,8 @@ fn separators(input: &str) -> IResult<&str, ()> {
     }
 
     // Try multiple newlines
-    if let Ok((remaining, _)) = sp(many1(newline))(input) {
+    let newlines_parser = many1(newline).map(|_: Vec<_>| ());
+    if let Ok((remaining, _)) = sp(newlines_parser)(input) {
         let (remaining, _) = possible_comment(remaining)?;
         let (remaining, _) = multispace0(remaining)?;
         return Ok((remaining, ()));
@@ -382,23 +386,23 @@ fn separators(input: &str) -> IResult<&str, ()> {
 
     // Try comma with whitespace
     let (input, _) = multispace0(input)?;
-    let (input, _) = char(',')(input)?;
+    let (input, _) = char(',').parse(input)?;
     let (input, _) = multispace0(input)?;
     let (input, _) = possible_comment(input)?;
     Ok((input, ()))
 }
 
 fn closing(input: &str, closing_char: char) -> IResult<&str, ()> {
-    let (input, _) = opt(separators)(input)?;
+    let (input, _) = opt(separators).parse(input)?;
     let (input, _) = multispace0(input)?;
-    let (input, _) = char(closing_char)(input)?;
+    let (input, _) = char(closing_char).parse(input)?;
     Ok((input, ()))
 }
 
 /// Helper function to parse colon or equals separator
 fn colon_or_equals(input: &str) -> IResult<&str, char> {
     let (input, _) = multispace0(input)?;
-    let result = alt((char::<&str, NomError<&str>>(':'), char('=')))(input);
+    let result = alt((char::<&str, NomError<&str>>(':'), char('='))).parse(input);
     match result {
         Ok((remaining, c)) => {
             let (remaining, _) = multispace0(remaining)?;
@@ -413,23 +417,29 @@ fn colon_or_equals(input: &str) -> IResult<&str, char> {
 // ============================================================================
 
 fn include_parser(input: &str) -> IResult<&str, Include<'_>> {
-    let (input, _) = tag("include ")(input)?;
+    let (input, _) = tag("include ").parse(input)?;
     let (input, _) = ws(many0(newline)).parse(input)?;
-    let (input, included) = sp(alt((
+
+    // Parse the include target with surrounding spaces
+    let (input, _) = space(input)?;
+    let (input, included) = alt((
         |i| {
-            let (i, _) = tag("file(")(i)?;
+            let (i, _) = tag("file(").parse(i)?;
             let (i, file_name) = string(i)?;
-            let (i, _) = tag(")")(i)?;
+            let (i, _) = tag(")").parse(i)?;
             Ok((i, Include::File(file_name)))
         },
         |i| {
-            let (i, _) = tag("url(")(i)?;
+            let (i, _) = tag("url(").parse(i)?;
             let (i, url) = string(i)?;
-            let (i, _) = tag(")")(i)?;
+            let (i, _) = tag(")").parse(i)?;
             Ok((i, Include::Url(url)))
         },
         string.map(Include::File),
-    )))(input)?;
+    ))
+    .parse(input)?;
+    let (input, _) = space(input)?;
+
     Ok((input, included))
 }
 
@@ -577,7 +587,7 @@ fn separated_hashlist<'a>(
     config: &'a HoconLoaderConfig,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<Hash>>> {
     move |input| {
-        let (input, parsed) = separated_list0(separators, key_value(config))(input)?;
+        let (input, parsed) = separated_list0(separators, key_value(config)).parse(input)?;
         Ok((input, helper::extract_result(parsed)))
     }
 }
@@ -587,7 +597,7 @@ fn hash<'a>(
 ) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
         let (input, _) = space(input)?;
-        let (input, _) = char('{')(input)?;
+        let (input, _) = char('{').parse(input)?;
         let (input, hashlist) = separated_hashlist(config)(input)?;
         let (input, _) = closing(input, '}')?;
         let (input, _) = space(input)?;
@@ -603,9 +613,9 @@ fn hashes<'a>(
     config: &'a HoconLoaderConfig,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Hash>> {
     move |input| {
-        let (input, maybe_substitution) = opt(path_substitution)(input)?;
+        let (input, maybe_substitution) = opt(path_substitution).parse(input)?;
         let (input, first_hash) = hash(config)(input)?;
-        let (input, remaining_hashes) = many0(hash(config))(input)?;
+        let (input, remaining_hashes) = many0(hash(config)).parse(input)?;
 
         let result = match (maybe_substitution, remaining_hashes.is_empty()) {
             (None, true) => first_hash,
@@ -646,7 +656,7 @@ fn root_hash<'a>(
     move |input| {
         let (input, _) = space(input)?;
         // Make sure it doesn't start with '{'
-        let (input, _) = not(char('{'))(input)?;
+        let (input, _) = not(char('{')).parse(input)?;
         let (input, hashlist) = separated_hashlist(config)(input)?;
         let (input, _) = space(input)?;
 
@@ -665,9 +675,9 @@ fn array<'a>(
     config: &'a HoconLoaderConfig,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>>> {
     move |input| {
-        let (input, _) = sp(char('['))(input)?;
+        let (input, _) = sp(char('[')).parse(input)?;
         let (input, _) = multispace0(input)?;
-        let (input, items) = separated_list0(separators, wrapper(config))(input)?;
+        let (input, items) = separated_list0(separators, wrapper(config)).parse(input)?;
         let (input, _) = closing(input, ']')?;
 
         Ok((input, helper::extract_result(items)))
@@ -678,9 +688,9 @@ fn arrays<'a>(
     config: &'a HoconLoaderConfig,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, Result<Vec<HoconInternal>>> {
     move |input| {
-        let (input, maybe_substitution) = opt(path_substitution)(input)?;
+        let (input, maybe_substitution) = opt(path_substitution).parse(input)?;
         let (input, first_array) = array(config)(input)?;
-        let (input, remaining_arrays) = many0(array(config))(input)?;
+        let (input, remaining_arrays) = many0(array(config)).parse(input)?;
 
         let result = match (maybe_substitution, remaining_arrays.is_empty()) {
             (None, true) => first_array,
