@@ -1,5 +1,5 @@
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::distr::Alphanumeric;
+use rand::Rng;
 
 use hocon::{Error, Hocon, HoconLoader};
 use linked_hash_map::LinkedHashMap;
@@ -509,13 +509,13 @@ fn substitute_before_and_after() {
 fn environment_variable() {
     let env_name: String = format!(
         "e{}",
-        thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(30)
             .map(char::from)
             .collect::<String>()
     );
-    let env_value: String = thread_rng()
+    let env_value: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(30)
         .map(char::from)
@@ -535,13 +535,13 @@ fn environment_variable() {
 fn environment_variable_with_default_value() {
     let env_name: String = format!(
         "e{}",
-        thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(30)
             .map(char::from)
             .collect::<String>()
     );
-    let env_value: String = thread_rng()
+    let env_value: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(30)
         .map(char::from)
@@ -574,14 +574,14 @@ fn environment_variable_with_default_value() {
 fn environment_variable_with_default_value_complex() {
     let env_name: String = format!(
         "e{}",
-        thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .take(30)
             .map(char::from)
             .collect::<String>()
     );
 
-    let env_value: String = thread_rng()
+    let env_value: String = rand::rng()
         .sample_iter(&Alphanumeric)
         .take(30)
         .map(char::from)
