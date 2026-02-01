@@ -305,9 +305,8 @@ impl HoconInternal {
                         .rev()
                         .cloned()
                         .collect();
-                    let existing_array = concatenated_arrays
-                        .entry(concat_root.clone())
-                        .or_default();
+                    let existing_array =
+                        concatenated_arrays.entry(concat_root.clone()).or_default();
                     let nb_elems = existing_array.keys().len();
                     let idx = existing_array
                         .entry(HoconValue::String(Rc::clone(&item_id)))

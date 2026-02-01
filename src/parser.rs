@@ -36,7 +36,6 @@ use crate::internals::Include;
 use crate::HoconLoaderConfig;
 use crate::Result;
 
-
 /// Root parser - the main entry point for parsing HOCON documents.
 pub(crate) fn root<'a>(
     config: &'a HoconLoaderConfig,
@@ -747,4 +746,3 @@ fn root_include<'a>(
         Ok((input, doc.and_then(|mut d| d.add_include(included, config))))
     }
 }
-
