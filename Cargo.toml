@@ -24,7 +24,6 @@ reqwest = { version = "0.13", optional = true, default-features = false, feature
 uuid = { version = "1.20", features = [ "v4" ] }
 serde_path_to_error = "0.1"
 aho-corasick = "1.1"
-lazy_static = "1.5"
 linked-hash-map = "0.5"
 
 [dev-dependencies]
