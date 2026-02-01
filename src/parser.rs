@@ -5,6 +5,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 use nom::character::complete::char;
+use nom::character::complete::digit1;
 use nom::character::complete::multispace0;
 use nom::character::complete::newline;
 use nom::character::complete::none_of;
@@ -19,7 +20,6 @@ use nom::error::ParseError;
 use nom::multi::many0;
 use nom::multi::many1;
 use nom::multi::separated_list0;
-use nom::number::complete::recognize_float;
 use nom::sequence::delimited;
 use nom::sequence::pair;
 use nom::sequence::tuple;
@@ -35,7 +35,6 @@ use crate::internals::HoconValue;
 use crate::internals::Include;
 use crate::HoconLoaderConfig;
 use crate::Result;
-
 
 /// Root parser - the main entry point for parsing HOCON documents.
 pub(crate) fn root<'a>(
@@ -129,8 +128,20 @@ fn comment(input: &str) -> IResult<&str, ()> {
 // Primitive value parsers
 // ============================================================================
 
+/// Recognizes a number that conforms to JSON/HOCON spec.
+/// Requires at least one digit before the decimal point (so `.33` is NOT valid, but `0.33` is).
+/// Format: [-]digits[.digits][e[+-]digits]
+fn recognize_number(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        opt(char('-')),
+        digit1,
+        opt(pair(char('.'), digit1)),
+        opt(tuple((one_of("eE"), opt(one_of("+-")), digit1))),
+    )))(input)
+}
+
 fn integer(input: &str) -> IResult<&str, i64> {
-    let (remaining, parsed) = recognize_float(input)?;
+    let (remaining, parsed) = recognize_number(input)?;
     match parsed.parse::<i64>() {
         Ok(val) => Ok((remaining, val)),
         Err(_) => Err(NomErr::Error(NomError::new(input, ErrorKind::Digit))),
@@ -138,7 +149,7 @@ fn integer(input: &str) -> IResult<&str, i64> {
 }
 
 fn float(input: &str) -> IResult<&str, f64> {
-    let (remaining, parsed) = recognize_float(input)?;
+    let (remaining, parsed) = recognize_number(input)?;
     match parsed.parse::<f64>() {
         Ok(val) => Ok((remaining, val)),
         Err(_) => Err(NomErr::Error(NomError::new(input, ErrorKind::Float))),
@@ -747,4 +758,3 @@ fn root_include<'a>(
         Ok((input, doc.and_then(|mut d| d.add_include(included, config))))
     }
 }
-

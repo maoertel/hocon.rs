@@ -18,7 +18,7 @@ fn stable_readable_display(value: &Hocon) -> String {
         Hocon::Array(v) => format!(
             "[{}]",
             v.iter()
-                .map(|i| stable_readable_display(i))
+                .map(stable_readable_display)
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -55,7 +55,7 @@ fn snapshot(file_name: &str) {
     println!("original file: {}\n{}", file_name, original_content);
 
     assert_debug_snapshot!(
-        file_name.split('/').last().expect("during test"),
+        file_name.split('/').next_back().expect("during test"),
         stable_readable_display(&doc)
     );
 }

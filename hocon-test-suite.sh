@@ -18,18 +18,16 @@ do
     then
         total=$((total + 1))
         filename=`basename $conf_file`
-        cargo run --example hocon2json $conf_file > tmp/output/$filename
+        cargo run --quiet --example hocon2json $conf_file > tmp/output/$filename
         if [ $? -ne 0 ]
         then
             crashes=$((crashes + 1))
-            # errors+=("$filename")
             errors[${#errors[@]}]=$filename
         else
             cmp <(jq -cS . tmp/json/$filename) <(jq -cS . tmp/output/$filename)
             if [ $? -ne 0 ]
             then
                 failed_comp=$((failed_comp + 1))
-                # errors+=("$filename")
                 errors[${#errors[@]}]=$filename
             fi
         fi

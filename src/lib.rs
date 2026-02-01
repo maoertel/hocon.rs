@@ -597,7 +597,7 @@ mod tests {
         let res = res.expect("during test");
         assert_eq!(res.int, 56);
         assert_eq!(res.float, 543.12);
-        assert_eq!(res.boolean, false);
+        assert!(!res.boolean);
         assert_eq!(res.string, "test");
         assert_eq!(res.vec_sub[0].int, 8);
         assert_eq!(res.vec_sub[0].float, 1.5);
@@ -626,7 +626,7 @@ mod tests {
         let res = res.expect("during test");
         assert_eq!(res.int, 56);
         assert_eq!(res.float, 543.12);
-        assert_eq!(res.boolean, false);
+        assert!(!res.boolean);
         assert_eq!(res.string, "test");
         assert_eq!(res.vec_sub[0].int, 8);
         assert_eq!(res.vec_sub[0].float, 1.5);
