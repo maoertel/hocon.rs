@@ -8,9 +8,14 @@ fn hocon_to_json(hocon: Hocon) -> Option<Value> {
     match hocon {
         Hocon::Boolean(b) => Some(Value::Bool(b)),
         Hocon::Integer(i) => Some(Value::Number(Number::from(i))),
-        Hocon::Real(f) => Some(Value::Number(
-            Number::from_f64(f).unwrap_or(Number::from(0)),
-        )),
+        Hocon::Real(f) => {
+            // If float is a whole number, output as integer for JSON compatibility
+            if f.fract() == 0.0 && f >= i64::MIN as f64 && f <= i64::MAX as f64 {
+                Some(Value::Number(Number::from(f as i64)))
+            } else {
+                Some(Value::Number(Number::from_f64(f).unwrap_or(Number::from(0))))
+            }
+        }
         Hocon::String(s) => Some(Value::String(s)),
         Hocon::Array(vec) => Some(Value::Array(
             vec.into_iter().filter_map(hocon_to_json).collect(),
